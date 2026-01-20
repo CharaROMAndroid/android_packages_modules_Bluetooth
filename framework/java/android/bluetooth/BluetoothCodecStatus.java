@@ -127,8 +127,13 @@ public final class BluetoothCodecStatus implements Parcelable {
                 continue;
             }
             int channelMode = codecConfig.getChannelMode();
+            // Allow Dual Channel (0x4) for SBC codec even if not advertised by headphones.
+            // SBC Dual Channel is part of the SBC spec and all devices support it.
+            boolean isDualChannelSbc = (channelMode == BluetoothCodecConfig.CHANNEL_MODE_DUAL_CHANNEL
+                    && codecConfig.getCodecType() == BluetoothCodecConfig.SOURCE_CODEC_TYPE_SBC);
             if ((channelMode & selectableConfig.getChannelMode()) == 0
-                    && channelMode != BluetoothCodecConfig.CHANNEL_MODE_NONE) {
+                    && channelMode != BluetoothCodecConfig.CHANNEL_MODE_NONE
+                    && !isDualChannelSbc) {
                 continue;
             }
             return true;
