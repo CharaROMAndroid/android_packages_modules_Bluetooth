@@ -534,6 +534,9 @@ static bool select_audio_channel_mode(const btav_a2dp_codec_config_t* p_codec_au
         return true;
       }
       break;
+    case BTAV_A2DP_CODEC_CHANNEL_MODE_DUAL_CHANNEL:
+      // Dual channel not supported for aptX
+      break;
     case BTAV_A2DP_CODEC_CHANNEL_MODE_NONE:
       break;
   }
@@ -712,6 +715,10 @@ tA2DP_STATUS A2dpCodecConfigAptx::setCodecConfig(const uint8_t* p_peer_codec_inf
         result_config_cie.channelMode = A2DP_APTX_CHANNELS_STEREO;
         codec_config_.channel_mode = codec_user_config_.channel_mode;
       }
+      break;
+    case BTAV_A2DP_CODEC_CHANNEL_MODE_DUAL_CHANNEL:
+      // Dual channel not supported for aptX
+      codec_config_.channel_mode = BTAV_A2DP_CODEC_CHANNEL_MODE_NONE;
       break;
     case BTAV_A2DP_CODEC_CHANNEL_MODE_NONE:
       codec_config_.channel_mode = BTAV_A2DP_CODEC_CHANNEL_MODE_NONE;
