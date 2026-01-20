@@ -105,6 +105,9 @@ static ChannelMode A2dpCodecToHalChannelMode(const btav_a2dp_codec_config_t& a2d
       return ChannelMode::MONO;
     case BTAV_A2DP_CODEC_CHANNEL_MODE_STEREO:
       return ChannelMode::STEREO;
+    case BTAV_A2DP_CODEC_CHANNEL_MODE_DUAL_CHANNEL:
+      // Dual Channel is stereo from audio HAL perspective (2 channels)
+      return ChannelMode::STEREO;
     default:
       return ChannelMode::UNKNOWN;
   }

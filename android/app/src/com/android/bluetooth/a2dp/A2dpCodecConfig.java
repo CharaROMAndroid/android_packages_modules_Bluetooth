@@ -41,6 +41,9 @@ import java.util.Objects;
 class A2dpCodecConfig {
     private static final String TAG = A2dpCodecConfig.class.getSimpleName();
 
+    // SBC HD auto-enable property - when true, SBC HD gets priority above AAC
+    private static final String SBC_HD_ENABLED_PROPERTY = "persist.bluetooth.sbc_hd.enabled";
+
     private final Context mContext;
     private final A2dpNativeInterface mA2dpNativeInterface;
 
@@ -244,7 +247,12 @@ class A2dpCodecConfig {
         } catch (NotFoundException e) {
             value = BluetoothCodecConfig.CODEC_PRIORITY_DEFAULT;
         }
-        if ((value >= BluetoothCodecConfig.CODEC_PRIORITY_DISABLED)
+        // When SBC HD is enabled, disable AAC so SBC HD gets selected instead
+        boolean sbcHdEnabled = SystemProperties.getBoolean(SBC_HD_ENABLED_PROPERTY, false);
+        if (sbcHdEnabled) {
+            mA2dpSourceCodecPriorityAac = BluetoothCodecConfig.CODEC_PRIORITY_DISABLED;
+            Log.i(TAG, "SBC HD enabled: AAC codec disabled");
+        } else if ((value >= BluetoothCodecConfig.CODEC_PRIORITY_DISABLED)
                 && (value < BluetoothCodecConfig.CODEC_PRIORITY_HIGHEST)) {
             mA2dpSourceCodecPriorityAac = value;
         }
@@ -300,11 +308,15 @@ class A2dpCodecConfig {
 
         BluetoothCodecConfig codecConfig;
         BluetoothCodecConfig[] codecConfigArray = new BluetoothCodecConfig[7];
-        codecConfig =
-                new BluetoothCodecConfig.Builder()
+        // When SBC HD enabled, configure standard SBC with Dual Channel + HD magic value
+        BluetoothCodecConfig.Builder sbcBuilder = new BluetoothCodecConfig.Builder()
                         .setCodecType(BluetoothCodecConfig.SOURCE_CODEC_TYPE_SBC)
-                        .setCodecPriority(mA2dpSourceCodecPrioritySbc)
-                        .build();
+                        .setCodecPriority(sbcHdEnabled ? 2500 : mA2dpSourceCodecPrioritySbc);
+        if (sbcHdEnabled) {
+            sbcBuilder.setChannelMode(BluetoothCodecConfig.CHANNEL_MODE_DUAL_CHANNEL)
+                      .setCodecSpecific1(0x1337);
+        }
+        codecConfig = sbcBuilder.build();
         codecConfigArray[0] = codecConfig;
         codecConfig =
                 new BluetoothCodecConfig.Builder()
@@ -336,12 +348,20 @@ class A2dpCodecConfig {
                         .setCodecPriority(mA2dpSourceCodecPriorityOpus)
                         .build();
         codecConfigArray[5] = codecConfig;
-        codecConfig =
-                new BluetoothCodecConfig.Builder()
+
+        // SBC HD config - when enabled via property, boost priority above AAC and use Dual Channel
+        // sbcHdEnabled already defined above when checking AAC priority
+        int sbcHdPriority = sbcHdEnabled ? 2500 : mA2dpSourceCodecPrioritySbc;  // 2500 > AAC's 2001
+        BluetoothCodecConfig.Builder sbcHdBuilder = new BluetoothCodecConfig.Builder()
                         .setCodecType(BluetoothCodecConfig.SOURCE_CODEC_TYPE_SBC)
-                        .setCodecPriority(mA2dpSourceCodecPrioritySbc)
-                        .setCodecSpecific1(0x1337)
-                        .build();
+                        .setCodecPriority(sbcHdPriority)
+                        .setCodecSpecific1(0x1337);  // SBC HD magic value
+        if (sbcHdEnabled) {
+            // Force Dual Channel mode when SBC HD is enabled
+            sbcHdBuilder.setChannelMode(BluetoothCodecConfig.CHANNEL_MODE_DUAL_CHANNEL);
+            Log.i(TAG, "SBC HD auto-enabled: priority=" + sbcHdPriority + ", Dual Channel mode");
+        }
+        codecConfig = sbcHdBuilder.build();
         codecConfigArray[6] = codecConfig;
 
         return codecConfigArray;

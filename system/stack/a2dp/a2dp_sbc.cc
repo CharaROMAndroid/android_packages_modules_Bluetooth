@@ -47,6 +47,7 @@
 #include "gd/common/utils.h"
 #include "hardware/bt_av.h"
 #include "internal_include/bt_trace.h"
+#include "osi/include/properties.h"
 #include "stack/include/bt_hdr.h"
 
 #define A2DP_SBC_MAX_BITPOOL 53
@@ -985,6 +986,14 @@ static bool select_best_channel_mode(uint8_t ch_mode, tA2DP_SBC_CIE* p_result,
 static bool select_audio_channel_mode(const btav_a2dp_codec_config_t* p_codec_audio_config,
                                       uint8_t ch_mode, tA2DP_SBC_CIE* p_result,
                                       btav_a2dp_codec_config_t* p_codec_config) {
+  // SBC HD auto-enable: force Dual Channel when property is set
+  if (osi_property_get_bool("persist.bluetooth.sbc_hd.enabled", false)) {
+    p_result->ch_mode = A2DP_SBC_IE_CH_MD_DUAL;
+    p_codec_config->channel_mode = BTAV_A2DP_CODEC_CHANNEL_MODE_DUAL_CHANNEL;
+    log::info("SBC HD: forcing Dual Channel mode via property");
+    return true;
+  }
+
   switch (p_codec_audio_config->channel_mode) {
     case BTAV_A2DP_CODEC_CHANNEL_MODE_MONO:
       if (ch_mode & A2DP_SBC_IE_CH_MD_MONO) {
@@ -1348,6 +1357,11 @@ tA2DP_STATUS A2dpCodecConfigSbcBase::setCodecConfig(const uint8_t* p_peer_codec_
   //
   if (codec_user_config_.codec_specific_1 != 0) {
     codec_config_.codec_specific_1 = codec_user_config_.codec_specific_1;
+  }
+  // SBC HD: force codec_specific_1 = 0x1337 to enable HD bitrates
+  if (osi_property_get_bool("persist.bluetooth.sbc_hd.enabled", false)) {
+    codec_config_.codec_specific_1 = 0x1337;
+    log::info("SBC HD: forcing codec_specific_1=0x1337 for HD bitrates");
   }
   if (codec_user_config_.codec_specific_2 != 0) {
     codec_config_.codec_specific_2 = codec_user_config_.codec_specific_2;
