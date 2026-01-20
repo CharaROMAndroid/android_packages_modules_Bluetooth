@@ -59,6 +59,14 @@
 #define A2DP_SBC_3DH5_DEFAULT_BITRATE 552
 #define A2DP_SBC_3DH5_48KHZ_BITRATE 601
 
+/*
+ * SBC Dual Channel (SBC HD) 2DH5 bitrates.
+ * 492 kbps @ 48 khz, 452 kbps @ 44.1 khz.
+ * Fallback for devices without 3Mbps EDR support.
+ */
+#define A2DP_SBC_2DH5_DEFAULT_BITRATE 452
+#define A2DP_SBC_2DH5_48KHZ_BITRATE 492
+
 
 #define A2DP_SBC_NON_EDR_MAX_RATE 229
 
@@ -772,7 +780,7 @@ static uint8_t calculate_max_frames_per_packet(void) {
 static uint16_t a2dp_sbc_source_rate(bool is_peer_edr) {
   uint16_t rate = A2DP_SBC_DEFAULT_BITRATE;
 
-  /* check if we're SBC HD */
+  /* check if we're SBC HD with 3DH5 (highest quality) */
   if (a2dp_sbc_encoder_cb.hd &&
       a2dp_sbc_encoder_cb.peer_params.peer_supports_3mbps &&
       a2dp_sbc_encoder_cb.TxAaMtuSize >= MIN_3MBPS_AVDTP_SAFE_MTU) {
@@ -780,6 +788,15 @@ static uint16_t a2dp_sbc_source_rate(bool is_peer_edr) {
     if (a2dp_sbc_encoder_cb.sbc_encoder_params.s16SamplingFreq == SBC_sf48000) {
       rate = A2DP_SBC_3DH5_48KHZ_BITRATE;
     }
+    log::info("SBC HD: using 3DH5 bitrate {}", rate);
+  }
+  /* Fallback: SBC HD with 2DH5 for devices without 3Mbps support */
+  else if (a2dp_sbc_encoder_cb.hd && is_peer_edr) {
+    rate = A2DP_SBC_2DH5_DEFAULT_BITRATE;
+    if (a2dp_sbc_encoder_cb.sbc_encoder_params.s16SamplingFreq == SBC_sf48000) {
+      rate = A2DP_SBC_2DH5_48KHZ_BITRATE;
+    }
+    log::info("SBC HD: using 2DH5 fallback bitrate {}", rate);
   }
 
   /* restrict bitrate if a2dp link is non-edr */
