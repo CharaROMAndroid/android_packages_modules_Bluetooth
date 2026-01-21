@@ -40,6 +40,7 @@
 #include "embdrv/sbc/encoder/include/sbc_encoder.h"
 #include "internal_include/bt_target.h"
 #include "osi/include/allocator.h"
+#include "osi/include/properties.h"
 #include "stack/include/bt_hdr.h"
 
 /* Buffer pool */
@@ -711,7 +712,12 @@ static uint16_t adjust_effective_mtu(const tA2DP_ENCODER_INIT_PEER_PARAMS& peer_
     mtu_size = peer_params.peer_mtu;
   }
   log::verbose("original AVDTP MTU size: {}", mtu_size);
-  if (peer_params.is_peer_edr && !peer_params.peer_supports_3mbps) {
+
+  // Check if force max bitrate bypasses MTU restriction
+  bool force_max_bitrate = osi_property_get_bool(
+      "persist.bluetooth.sbc_hd.force_max_bitrate", false);
+
+  if (peer_params.is_peer_edr && !peer_params.peer_supports_3mbps && !force_max_bitrate) {
     // This condition would be satisfied only if the remote device is
     // EDR and supports only 2 Mbps, but the effective AVDTP MTU size
     // exceeds the 2DH5 packet size.
@@ -720,6 +726,8 @@ static uint16_t adjust_effective_mtu(const tA2DP_ENCODER_INIT_PEER_PARAMS& peer_
       log::warn("Restricting AVDTP MTU size from {} to {}", mtu_size, MAX_2MBPS_AVDTP_MTU);
       mtu_size = MAX_2MBPS_AVDTP_MTU;
     }
+  } else if (force_max_bitrate && !peer_params.peer_supports_3mbps) {
+    log::warn("Force max bitrate: NOT restricting MTU despite no 3Mbps support");
   }
   return mtu_size;
 }
@@ -780,8 +788,20 @@ static uint8_t calculate_max_frames_per_packet(void) {
 static uint16_t a2dp_sbc_source_rate(bool is_peer_edr) {
   uint16_t rate = A2DP_SBC_DEFAULT_BITRATE;
 
-  /* check if we're SBC HD with 3DH5 (highest quality) */
-  if (a2dp_sbc_encoder_cb.hd &&
+  // Check if force max bitrate is enabled (bypasses 3Mbps EDR AND MTU requirements)
+  bool force_max_bitrate = osi_property_get_bool(
+      "persist.bluetooth.sbc_hd.force_max_bitrate", false);
+
+  /* Force max bitrate: skip ALL checks and use 3DH5 directly */
+  if (a2dp_sbc_encoder_cb.hd && force_max_bitrate) {
+    rate = A2DP_SBC_3DH5_DEFAULT_BITRATE;
+    if (a2dp_sbc_encoder_cb.sbc_encoder_params.s16SamplingFreq == SBC_sf48000) {
+      rate = A2DP_SBC_3DH5_48KHZ_BITRATE;
+    }
+    log::warn("SBC HD: FORCING 3DH5 bitrate {} (bypassing all capability checks!)", rate);
+  }
+  /* check if we're SBC HD with 3DH5 (highest quality) - normal path */
+  else if (a2dp_sbc_encoder_cb.hd &&
       a2dp_sbc_encoder_cb.peer_params.peer_supports_3mbps &&
       a2dp_sbc_encoder_cb.TxAaMtuSize >= MIN_3MBPS_AVDTP_SAFE_MTU) {
     rate = A2DP_SBC_3DH5_DEFAULT_BITRATE;
